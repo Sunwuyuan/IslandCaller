@@ -28,6 +28,8 @@
 #include <cstring>
 #include <cstdint>
 #include <cmath>
+#include <mutex>
+#include <algorithm>
 #endif //PCH_H
 
 #ifdef EXPORT_DLL
