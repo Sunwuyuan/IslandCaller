@@ -4,16 +4,13 @@ using namespace std;
 vector<string> students;
 bool isInitialized = false;
 unordered_set<string> RandomHashSet; // 用于存储已抽取的学生名单
-
-random_device rd; // 随机数生成器
-mt19937 gen(rd());
-uniform_int_distribution<> dist(0, 0);
+mutex randomMutex; // 线程安全保护
 
 EXPORT_DLL int RandomImport(const wchar_t* filenameW)
 {
+    lock_guard<mutex> lock(randomMutex); // 线程安全保护
     students.clear(); // 清空学生名单
     RandomHashSet.clear(); // 清空已抽取的学生名单
-    dist = uniform_int_distribution<>(0, 0);
     wstring wstr(filenameW);
     string filename(wstr.begin(), wstr.end());
     filename += ".csv";
@@ -73,7 +70,6 @@ EXPORT_DLL int RandomImport(const wchar_t* filenameW)
         return -1;
     }
 
-    dist = uniform_int_distribution<>(0, students.size() - 1);
     ImportHashSet.clear(); // 清空导入的哈希集
     isInitialized = true;
     return 0;
@@ -81,12 +77,14 @@ EXPORT_DLL int RandomImport(const wchar_t* filenameW)
 
 EXPORT_DLL void ClearHistory()
 {
+    lock_guard<mutex> lock(randomMutex); // 线程安全保护
     RandomHashSet.clear(); // 清空已抽取的学生名单
 }
 
 //点名器函数
 EXPORT_DLL BSTR SimpleRandom(const int number)
 {
+    lock_guard<mutex> lock(randomMutex); // 线程安全保护
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter; // UTF-8 => UTF-16
     if (!isInitialized)
     {
@@ -97,23 +95,59 @@ EXPORT_DLL BSTR SimpleRandom(const int number)
     {
         return SysAllocString(converter.from_bytes("Not enough students!").c_str());// 如果请求的数量超过学生名单，则退出
     }
-    // 随机抽取学生
-    for (size_t i = 0; i < number; i++)
+    
+    // 如果已抽取的学生数量等于或超过总学生数，清空历史记录
+    if (RandomHashSet.size() >= students.size())
     {
-        if (RandomHashSet.size() >= students.size())
-        {
-            ClearHistory();
-        }
-        int randomIndex = dist(gen);
-        string randomstu = students[randomIndex];
-        if (RandomHashSet.find(randomstu) != RandomHashSet.end())
-        {
-            i -= 1; // 如果已抽取过该学生，则重新抽取
-            continue;
-        }
-        output += randomstu;
-        RandomHashSet.insert(randomstu); // 添加到已抽取名单中
-        output += (i == number - 1) ? "" : "  "; // 添加逗号分隔
+        RandomHashSet.clear();
     }
+    
+    // 创建可用学生索引列表（未被抽取的学生）
+    vector<int> availableIndices;
+    availableIndices.reserve(students.size() - RandomHashSet.size());
+    for (size_t i = 0; i < students.size(); i++)
+    {
+        if (RandomHashSet.find(students[i]) == RandomHashSet.end())
+        {
+            availableIndices.push_back(i);
+        }
+    }
+    
+    // 使用高质量随机数生成器进行洗牌
+    // 每次调用时使用新的随机种子确保真正的随机性
+    random_device rd;
+    mt19937 gen(rd());
+    
+    // 如果需要的学生数量超过可用数量，返回错误
+    if (number > availableIndices.size())
+    {
+        return SysAllocString(converter.from_bytes("Not enough available students!").c_str());
+    }
+    
+    // 使用Fisher-Yates洗牌算法随机选择学生
+    for (int i = 0; i < number; i++)
+    {
+        uniform_int_distribution<> dist(i, availableIndices.size() - 1);
+        int randomPos = dist(gen);
+        
+        // 交换当前位置和随机位置的元素
+        swap(availableIndices[i], availableIndices[randomPos]);
+        
+        // 获取被选中的学生
+        string selectedStudent = students[availableIndices[i]];
+        
+        // 添加到输出
+        output += selectedStudent;
+        
+        // 标记该学生已被抽取
+        RandomHashSet.insert(selectedStudent);
+        
+        // 添加分隔符（除了最后一个学生）
+        if (i < number - 1)
+        {
+            output += "  ";
+        }
+    }
+    
     return SysAllocString(converter.from_bytes(output).c_str());
 }
