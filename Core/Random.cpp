@@ -125,7 +125,10 @@ EXPORT_DLL BSTR SimpleRandom(const int number)
     
     // 创建可用学生索引列表（未被抽取的学生）
     vector<int> availableIndices;
-    availableIndices.reserve(students.size() - RandomHashSet.size());
+    // 预留空间以提高性能，确保不会出现下溢
+    size_t availableCount = (RandomHashSet.size() < students.size()) ? 
+                            students.size() - RandomHashSet.size() : 0;
+    availableIndices.reserve(availableCount);
     for (size_t i = 0; i < students.size(); i++)
     {
         if (RandomHashSet.find(students[i]) == RandomHashSet.end())
@@ -139,8 +142,8 @@ EXPORT_DLL BSTR SimpleRandom(const int number)
     random_device rd;
     mt19937 gen(rd());
     
-    // 如果需要的学生数量超过可用数量，返回错误
-    if (number > availableIndices.size())
+    // 验证有足够的可用学生
+    if (number > static_cast<int>(availableIndices.size()))
     {
         return SysAllocString(converter.from_bytes("Not enough available students!").c_str());
     }
