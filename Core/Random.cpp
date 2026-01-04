@@ -125,10 +125,7 @@ EXPORT_DLL BSTR SimpleRandom(const int number)
     
     // 创建可用学生索引列表（未被抽取的学生）
     vector<int> availableIndices;
-    // 预留空间以提高性能，确保不会出现下溢
-    size_t availableCount = (RandomHashSet.size() < students.size()) ? 
-                            students.size() - RandomHashSet.size() : 0;
-    availableIndices.reserve(availableCount);
+    availableIndices.reserve(students.size() - RandomHashSet.size());
     for (size_t i = 0; i < students.size(); i++)
     {
         if (RandomHashSet.find(students[i]) == RandomHashSet.end())
@@ -154,7 +151,7 @@ EXPORT_DLL BSTR SimpleRandom(const int number)
     for (int i = 0; i < number; i++)
     {
         // 从 [i, availableIndices.size()-1] 范围内随机选择一个位置
-        uniform_int_distribution<> dist(i, availableIndices.size() - 1);
+        uniform_int_distribution<> dist(i, static_cast<int>(availableIndices.size()) - 1);
         int randomPos = dist(gen);
         
         // 交换当前位置和随机位置的元素
