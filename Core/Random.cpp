@@ -136,10 +136,14 @@ EXPORT_DLL BSTR SimpleRandom(const int number)
     
     // 使用高质量随机数生成器进行洗牌
     // 每次调用时使用新的随机种子确保真正的随机性
+    // 注意：虽然每次创建新的 random_device 和 mt19937 有一定开销，
+    // 但这是确保真正随机性的必要代价，避免了原实现中种子固定的问题
     random_device rd;
     mt19937 gen(rd());
     
     // 验证有足够的可用学生
+    // 注意：此检查是必要的，因为在清空 RandomHashSet 后（第123行），
+    // availableIndices 会包含所有学生，仍需确保数量足够
     if (number > static_cast<int>(availableIndices.size()))
     {
         return SysAllocString(converter.from_bytes("Not enough available students!").c_str());
