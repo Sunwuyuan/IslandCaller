@@ -1,10 +1,31 @@
 #include "pch.h"
 using namespace std;
 
-vector<string> students;
-bool isInitialized = false;
-unordered_set<string> RandomHashSet; // 用于存储已抽取的学生名单
-mutex randomMutex; // 线程安全保护
+// 全局变量
+vector<string> students;              // 学生名单
+bool isInitialized = false;           // 是否已初始化
+unordered_set<string> RandomHashSet;  // 用于存储已抽取的学生名单（防止重复）
+mutex randomMutex;                    // 线程安全保护：防止多线程并发访问导致的数据竞争
+
+/*
+ * 随机选择算法改进说明：
+ * 
+ * 问题1：随机数生成器种子固定
+ * 原实现：使用全局的 random_device 和 mt19937，只在 DLL 加载时初始化一次
+ * 改进：每次调用 SimpleRandom 时重新创建 random_device 和 mt19937
+ * 效果：确保每次调用都有真正的随机性，不会因为种子固定而产生可预测的序列
+ * 
+ * 问题2：低效的重试机制
+ * 原实现：随机选择后如果发现重复，就递减计数器重新选择
+ * 缺点：当已抽取学生接近总数时，可能需要大量重试
+ * 改进：使用 Fisher-Yates 洗牌算法，预先构建可用学生列表
+ * 效果：时间复杂度从最坏 O(∞) 降低到 O(n)，保证性能稳定
+ * 
+ * 问题3：缺乏线程安全
+ * 原实现：全局变量无保护，多线程访问会导致数据竞争
+ * 改进：使用 mutex 和 lock_guard 保护所有共享状态
+ * 效果：支持多线程安全调用
+ */
 
 EXPORT_DLL int RandomImport(const wchar_t* filenameW)
 {
@@ -124,9 +145,12 @@ EXPORT_DLL BSTR SimpleRandom(const int number)
         return SysAllocString(converter.from_bytes("Not enough available students!").c_str());
     }
     
-    // 使用Fisher-Yates洗牌算法随机选择学生
+    // 使用 Fisher-Yates 洗牌算法随机选择学生
+    // 算法原理：从可用学生中逐个随机选择，每次选择后将其与当前位置交换
+    // 这样可以保证：1) 每个学生被选中的概率相等  2) 不会重复选择  3) 时间复杂度 O(n)
     for (int i = 0; i < number; i++)
     {
+        // 从 [i, availableIndices.size()-1] 范围内随机选择一个位置
         uniform_int_distribution<> dist(i, availableIndices.size() - 1);
         int randomPos = dist(gen);
         
